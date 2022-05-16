@@ -32,6 +32,7 @@ class Scene:
         self._entities_to_delete = Queue()
 
     def add_systems(self, systems: List["System"]):
+        """ adds and sorts all given systems by priority """
         for system in systems:
             self._systems.append(system)
         self._systems.sort(key=lambda s: s.PRIORITY)
@@ -48,6 +49,7 @@ class Scene:
         entity.removed = True
 
     def propagate_signal(self, current_system: "System", signal: "Signal"):
+        """ propagates the given signal to the systems that have a matching signature """
         for system in self._systems:
             if (system is not current_system) and (check_signature(signal.signature, system.SIGNATURE)):
                 system.signals.put(signal)
@@ -87,8 +89,13 @@ class Entity:
         self.removed = False
 
     def add_component(self, component: "Component"):
+        """ adds a component to the entity """
         self.signature = self.signature | component.SIGNATURE
         self.components.append(component)
+
+    def has_component(self, component_type: Type["Component"]) -> bool:
+        """ returns whether the entity has a component that matches the given type """
+        return check_signature(self.signature, component_type.SIGNATURE)
 
 
 class EntityCollection:
@@ -108,7 +115,7 @@ class EntityCollection:
         self._affected_components_since_last_clear = self._affected_components_since_last_clear | entity.signature
         self.entities.pop(entity.id)
 
-    def filter_by_signature(self, component_signature: int):
+    def filter_by_signature(self, component_signature: int) -> List["Component"]:
         """ filters all components of all entities given a single component signature, then caches the result """
         if component_signature in self._component_filter_cache:
             return self._component_filter_cache[component_signature]
@@ -122,12 +129,19 @@ class EntityCollection:
         self._component_filter_cache[component_signature] = result
         return result
 
-    def filter_by_type(self, component_type: Type["Component"]):
+    def filter_by_type(self, component_type: Type["Component"]) -> List["Component"]:
         """ filters all components of all entities given a component type """
         return self.filter_by_signature(component_type.SIGNATURE)
 
+    def filter_by_types(self, component_types: List[Type["Component"]]) -> List["Component"]:
+        """ filters all components of all entities given a list of component types """
+        signature: int = 0
+        for c_type in component_types:
+            signature = signature | c_type.SIGNATURE
+        return self.filter_by_signature(signature)
+
     def clear_cache(self):
-        """ clear the component-filter cache """
+        """ clear the component-filter cache, should be called every time one or more entities are created/deleted """
         signatures_to_delete = get_atomic_signatures(self._affected_components_since_last_clear)
         for signature in signatures_to_delete:
             if signature in self._component_filter_cache:
@@ -187,6 +201,7 @@ class System:
         return check_signature(entity.signature, self.SIGNATURE)
 
     def handle_signals(self):
+        """ handle all received signals """
         while not self.signals.empty():
             signal = self.signals.get()
             handler = self.SIGNAL_HANDLERS.get(type(signal), default_signal_handler)
