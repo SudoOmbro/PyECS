@@ -116,6 +116,7 @@ class EntityCollection:
         self.entities.pop(entity.id)
 
     def filter_by_signature(self, component_signature: int) -> List["Component"]:
+        # TODO return a list of entities instead of components & add a method to fetch components from  entities (with a cache)
         """ filters all components of all entities given a single component signature, then caches the result """
         if component_signature in self._component_filter_cache:
             return self._component_filter_cache[component_signature]
