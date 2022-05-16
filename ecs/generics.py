@@ -1,10 +1,13 @@
+from functools import cache
 from typing import List, Type, Set, Callable, Dict
 from queue import Queue
 
-from ecs.utils import check_signature, get_atomic_signatures
+from ecs.utils import check_signature, SignedObject, IDManager, Collection
 
 LAST_SIGNATURE: int = 1
-LAST_ID: int = 0
+
+ENTITY_ID_MANAGER = IDManager()
+SIGNAL_ID_MANAGER = IDManager()
 
 
 def get_new_component_signature() -> int:
@@ -15,12 +18,12 @@ def get_new_component_signature() -> int:
     return signature
 
 
-def get_new_entity_id() -> int:
-    """ gets a new entity id """
-    global LAST_ID
-    new_id = LAST_ID
-    LAST_ID += 1
-    return new_id
+@cache
+def get_signature_from_list_of_components(component_types: List[Type["Component"]]) -> int:
+    signature: int = 0
+    for c_type in component_types:
+        signature = signature | c_type.SIGNATURE
+    return signature
 
 
 class Scene:
@@ -57,12 +60,12 @@ class Scene:
     def _add_entities(self):
         while not self._entities_to_add.empty():
             entity = self._entities_to_add.get()
-            self.entities.add_entity(entity)
+            self.entities.add(entity)
 
     def _del_entities(self):
         while not self._entities_to_delete.empty():
             entity = self._entities_to_add.get()
-            self.entities.delete_entity(entity)
+            self.entities.delete(entity)
 
     def update(self):
         """ update the scene """
@@ -78,14 +81,14 @@ class Scene:
             self.entities.clear_cache()
 
 
-class Entity:
+class Entity(SignedObject):
 
     components: List["Component"]
 
     def __init__(self):
         """ add components in the extension to this method by calling add_component """
         self.signature: int = 0
-        self.id = get_new_entity_id()
+        self.id = ENTITY_ID_MANAGER.next_id()
         self.removed = False
 
     def add_component(self, component: "Component"):
@@ -97,57 +100,36 @@ class Entity:
         """ returns whether the entity has a component that matches the given type """
         return check_signature(self.signature, component_type.SIGNATURE)
 
-
-class EntityCollection:
-
-    def __init__(self):
-        self.entities: Dict[int, Entity] = {}
-        self._component_filter_cache: Dict[int, List[Component]] = {}
-        self._affected_components_since_last_clear: int = 0
-
-    def add_entity(self, entity: Entity):
-        """ add an entity to the collection """
-        self._affected_components_since_last_clear = self._affected_components_since_last_clear | entity.signature
-        self.entities[entity.id] = entity
-
-    def delete_entity(self, entity: Entity):
-        """ remove an entity from the collection """
-        self._affected_components_since_last_clear = self._affected_components_since_last_clear | entity.signature
-        self.entities.pop(entity.id)
-
-    def filter_by_signature(self, component_signature: int) -> List["Component"]:
-        # TODO return a list of entities instead of components & add a method to fetch components from  entities (with a cache)
-        """ filters all components of all entities given a single component signature, then caches the result """
-        if component_signature in self._component_filter_cache:
-            return self._component_filter_cache[component_signature]
+    def get_components_by_signature(self, signature: int) -> List["Component"]:
         result: List[Component] = []
-        for entity_id in self.entities:
-            entity = self.entities[entity_id]
-            if check_signature(entity.signature, component_signature):
-                for component in entity.components:
-                    if component.SIGNATURE == component_signature:
-                        result.append(component)
-        self._component_filter_cache[component_signature] = result
+        for component in self.components:
+            if check_signature(signature, component.SIGNATURE):
+                result.append(component)
         return result
 
-    def filter_by_type(self, component_type: Type["Component"]) -> List["Component"]:
+    def get_components_by_types(self, component_types: List[Type["Component"]]) -> List["Component"]:
+        signature = get_signature_from_list_of_components(component_types)
+        return self.get_components_by_signature(signature)
+
+
+class EntityCollection(Collection):
+
+    def add(self, obj: Entity):
+        super().add(obj)
+
+    def delete(self, obj: Entity):
+        super().delete(obj)
+
+    def filter_by_type(self, component_type: Type["Component"]) -> List[Entity]:
         """ filters all components of all entities given a component type """
+        # noinspection PyTypeChecker
         return self.filter_by_signature(component_type.SIGNATURE)
 
-    def filter_by_types(self, component_types: List[Type["Component"]]) -> List["Component"]:
+    def filter_by_types(self, component_types: List[Type["Component"]]) -> List[Entity]:
         """ filters all components of all entities given a list of component types """
-        signature: int = 0
-        for c_type in component_types:
-            signature = signature | c_type.SIGNATURE
+        signature = get_signature_from_list_of_components(component_types)
+        # noinspection PyTypeChecker
         return self.filter_by_signature(signature)
-
-    def clear_cache(self):
-        """ clear the component-filter cache, should be called every time one or more entities are created/deleted """
-        signatures_to_delete = get_atomic_signatures(self._affected_components_since_last_clear)
-        for signature in signatures_to_delete:
-            if signature in self._component_filter_cache:
-                del self._component_filter_cache[signature]
-        self._affected_components_since_last_clear = 0
 
 
 class Component:
@@ -162,10 +144,11 @@ class Component:
         self.owner = owner
 
 
-class Signal:
+class Signal(SignedObject):
     """ create your own custom signals to pass to other systems by inheriting from this class """
 
     def __init__(self, involved_entities: List[Entity]):
+        self.id = SIGNAL_ID_MANAGER.next_id()
         self.signature = 0
         for entity in involved_entities:
             self.signature = self.signature | entity.signature
