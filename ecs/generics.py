@@ -1,25 +1,17 @@
 from functools import cache
-from typing import List, Type, Set, Callable, Dict
+from typing import List, Type, Callable, Dict, Tuple
 from queue import Queue
 
-from ecs.utils import check_signature, SignedObject, IDManager, Collection
+from ecs.utils import check_signature, SignedObject, IDManager, Collection, SignatureManager
 
-LAST_SIGNATURE: int = 1
+COMPONENT_SIGNATURE_MANAGER = SignatureManager()
 
 ENTITY_ID_MANAGER = IDManager()
-SIGNAL_ID_MANAGER = IDManager()
-
-
-def get_new_component_signature() -> int:
-    """ this limits the max amount of systems to 32 at worst """
-    global LAST_SIGNATURE
-    signature = LAST_SIGNATURE
-    LAST_SIGNATURE = LAST_SIGNATURE << 1
-    return signature
+SIGNAL_TYPE_ID_MANAGER = IDManager()
 
 
 @cache
-def get_signature_from_list_of_components(component_types: List[Type["Component"]]) -> int:
+def get_signature_from_components(component_types: Tuple[Type["Component"]]) -> int:
     signature: int = 0
     for c_type in component_types:
         signature = signature | c_type.SIGNATURE
@@ -54,7 +46,11 @@ class Scene:
     def propagate_signal(self, current_system: "System", signal: "Signal"):
         """ propagates the given signal to the systems that have a matching signature """
         for system in self._systems:
-            if (system is not current_system) and (check_signature(signal.signature, system.SIGNATURE)):
+            if (
+                (system is not current_system) and
+                (signal.TYPE_ID in system.SIGNAL_HANDLERS) and
+                (check_signature(signal.signature, system.SIGNATURE))
+            ):
                 system.signals.put(signal)
 
     def _add_entities(self):
@@ -82,7 +78,6 @@ class Scene:
 
 
 class Entity(SignedObject):
-
     components: List["Component"]
 
     def __init__(self):
@@ -107,8 +102,8 @@ class Entity(SignedObject):
                 result.append(component)
         return result
 
-    def get_components_by_types(self, component_types: List[Type["Component"]]) -> List["Component"]:
-        signature = get_signature_from_list_of_components(component_types)
+    def get_components_by_types(self, component_types: Tuple[Type["Component"]]) -> List["Component"]:
+        signature = get_signature_from_components(component_types)
         return self.get_components_by_signature(signature)
 
 
@@ -125,18 +120,17 @@ class EntityCollection(Collection):
         # noinspection PyTypeChecker
         return self.filter_by_signature(component_type.SIGNATURE)
 
-    def filter_by_types(self, component_types: List[Type["Component"]]) -> List[Entity]:
+    def filter_by_types(self, component_types: Tuple[Type["Component"]]) -> List[Entity]:
         """ filters all components of all entities given a list of component types """
-        signature = get_signature_from_list_of_components(component_types)
+        signature = get_signature_from_components(component_types)
         # noinspection PyTypeChecker
         return self.filter_by_signature(signature)
 
 
 class Component:
-
     SIGNATURE: int
     """ 
-    call get_new_component_signature and assign the return 
+    call COMPONENT_SIGNATURE_MANAGER.next_signature() and assign the return 
     value to SIGNATURE for each new type of component you make 
     """
 
@@ -147,26 +141,27 @@ class Component:
 class Signal(SignedObject):
     """ create your own custom signals to pass to other systems by inheriting from this class """
 
-    def __init__(self, involved_entities: List[Entity]):
-        self.id = SIGNAL_ID_MANAGER.next_id()
-        self.signature = 0
-        for entity in involved_entities:
-            self.signature = self.signature | entity.signature
+    TYPE_ID: int
+    """
+    assign the return value of SIGNAL_TYPE_ID_MANAGER.next_id() when writing a new signal
+    """
 
 
 class System:
-
     PRIORITY: int
     """ The priority the system has on the others. The lower it is, the sooner the system will be processed """
-    REQUIRE: Set[Type[Component]]
-    """ A set containing all the required components to make the system work """
+    REQUIRE: Tuple[Type[Component]]
+    """  """
     SIGNATURE: int = 0
     """ 
     call calculate_required_signature and assign the return 
     value to SIGNATURE for each new type of system you make 
     """
-    SIGNAL_HANDLERS: Dict[Type[Signal], Callable[["System", Scene, Signal], None]]
-    """ A switch that defines which handlers should be used to handle the signal """
+    SIGNAL_HANDLERS: Dict[int, Callable[["System", Scene, Signal], None]]
+    """ 
+    A switch that defines which handlers should be used to handle the signal, 
+    basically a map between signal signature & handler.
+    """
 
     @classmethod
     def calculate_required_signature(cls):
@@ -180,22 +175,13 @@ class System:
         self.signals = Queue()
         self.enabled = enabled
 
-    def signature_match(self, entity: Entity) -> bool:
-        """ returns whether the given entity's signature matches with the system's """
-        return check_signature(entity.signature, self.SIGNATURE)
-
     def handle_signals(self):
         """ handle all received signals """
         while not self.signals.empty():
             signal = self.signals.get()
-            handler = self.SIGNAL_HANDLERS.get(type(signal), default_signal_handler)
+            handler = self.SIGNAL_HANDLERS[signal.TYPE_ID]
             handler(self, self.room, signal)
 
     def update(self):
         """ put system logic here """
         raise NotImplemented
-
-
-def default_signal_handler(system: System, room: Scene, signal: Signal):
-    """ does nothing :) """
-    return None

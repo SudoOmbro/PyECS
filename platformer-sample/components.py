@@ -1,9 +1,9 @@
-from ecs.generics import Component, get_new_component_signature, Entity
+from ecs.generics import Component, COMPONENT_SIGNATURE_MANAGER, Entity
 
 
-class PositionComponent(Component):
+class Position(Component):
 
-    SIGNATURE = get_new_component_signature()
+    SIGNATURE = COMPONENT_SIGNATURE_MANAGER.next_signature()
 
     def __init__(self, owner: Entity, x: float, y: float):
         super().__init__(owner)
@@ -11,16 +11,21 @@ class PositionComponent(Component):
         self.y = y
 
 
-class MomentumComponent(Component):
+class PhysicsTypes:
 
-    def __init__(self, owner: Entity, x: float, y: float, ):
+    STATIC = 0
+    RIGID_BODY = 1
+    TILE_MAP = 2
+
+
+class Physical(Component):
+
+    SIGNATURE = COMPONENT_SIGNATURE_MANAGER.next_signature()
+
+    SUBTYPE: int
+    """ determines what kind of physics will be applied to the owner entity, if any (see PhysicsTypes) """
+
+    def __init__(self, owner: Entity, x_offset: float, y_offset: float, ):
         super().__init__(owner)
-
-
-class ColliderComponent(Component):
-
-    SIGNATURE = get_new_component_signature()
-
-    def __init__(self, owner: Entity, ):
-        super().__init__(owner)
-
+        self.x_offset = x_offset
+        self.y_offset = y_offset

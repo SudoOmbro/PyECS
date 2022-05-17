@@ -19,6 +19,13 @@ def get_atomic_signatures(signature: int) -> List[int]:
     return result
 
 
+def combine_signatures(objects: List["SignedObject"]) -> int:
+    result: int = 0
+    for obj in objects:
+        result = result | obj.signature
+    return result
+
+
 class IDManager:
     """ Manages IDs """
 
@@ -28,6 +35,18 @@ class IDManager:
     def next_id(self) -> int:
         current: int = self._last_id
         self._last_id += 1
+        return current
+
+
+class SignatureManager:
+    """ Manages signatures """
+
+    def __init__(self):
+        self._last_signature: int = 1
+
+    def next_signature(self) -> int:
+        current: int = self._last_signature
+        self._last_signature = self._last_signature << 1
         return current
 
 
