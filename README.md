@@ -16,21 +16,20 @@ Each component type is identified by a **signature**
 
 ### Systems
 Used to make **components** interact in order to actually give functionality to the simulation.
-Every system has a **signature** which is determined by the required components.
 
 System update functions should be designed for parallelism.
 
 ### Signals
 Used by systems to communicate events to other systems.
-Signals are distributed to a system only if their signature matches the system's signature.
+Signals are distributed to a system only if they are handled by the System.
 Each signal can hold arbitrary data and systems must have custom handlers for each type of
-signal.
+signal it needs to handle, optionally subdivided by signature.
 
 ### Scenes
 containers for **systems** and **entities** that also provides ways for them to 
 create new entities, delete already existing entities & propagate **signals**.
 
-A scene can be thought of as a game's level.
+A scene can be thought of as a level in a game.
 
 ## Extensions
 Some nice-to-have packages.

@@ -48,8 +48,7 @@ class Scene:
         for system in self._systems:
             if (
                 (system is not current_system) and
-                (signal.TYPE_ID in system.SIGNAL_HANDLERS) and
-                (check_signature(signal.signature, system.SIGNATURE))
+                (signal.TYPE_ID in system.SIGNAL_HANDLERS)
             ):
                 system.signals.put(signal)
 
@@ -167,16 +166,14 @@ class Signal(SignedObject):
     """ calculated at runtime by the emitting system """
 
 
+def default_handler(system: "System", scene: Scene, signal: Signal):
+    """ does nothing, returned by _retrieve_handler if no matching handler is found for the given signal """
+    return None
+
+
 class System:
     PRIORITY: int
     """ The priority the system has on the others. The lower it is, the sooner the system will be processed """
-    REQUIRE: Tuple[Type[Component]]
-    """  """
-    SIGNATURE: int = 0
-    """ 
-    call calculate_required_signature and assign the return 
-    value to SIGNATURE for each new type of system you make 
-    """
     SIGNAL_HANDLERS: Dict[int, Dict[int, Callable[["System", Scene, Signal], None]]]
     """ 
     A switch that defines which handlers should be used to handle the signal, 
@@ -185,23 +182,25 @@ class System:
     Put 0 as signature to have the handler associated with it handle every signal regardless of signature
     """
 
-    @classmethod
-    def calculate_required_signature(cls):
-        """ call this function at class creation time and assign the value to SIGNATURE """
-        for ctype in cls.REQUIRE:
-            cls.SIGNATURE = cls.SIGNATURE | ctype.SIGNATURE
-
     def __init__(self, room: Scene, enabled: bool = True):
         self.room = room
         self.entities = []
         self.signals = Queue()
         self.enabled = enabled
 
+    @cache
+    def _retrieve_handler(self, signal_id: int, signal_signature: int):
+        handler_category = self.SIGNAL_HANDLERS[signal_id]  # we are sure this exists since it's checked while propagating the signal
+        for signature in handler_category:
+            if check_signature(signal_signature, signature):
+                return handler_category[signature]
+        return default_handler
+
     def handle_signals(self):
         """ handle all received signals """
         while not self.signals.empty():
             signal = self.signals.get()
-            handler = self.SIGNAL_HANDLERS[signal.TYPE_ID]
+            handler = self._retrieve_handler(signal.TYPE_ID, signal.signature)
             handler(self, self.room, signal)
 
     def update(self):
