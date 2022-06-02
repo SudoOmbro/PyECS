@@ -25,7 +25,9 @@ class Physical(Component):
     SUBTYPE: int
     """ determines what kind of physics will be applied to the owner entity, if any (see PhysicsTypes) """
 
-    def __init__(self, owner: Entity, x_offset: float, y_offset: float, ):
+    def __init__(self, owner: Entity, x_offset: float, y_offset: float, x_size: float, y_size: float):
         super().__init__(owner)
         self.x_offset = x_offset
         self.y_offset = y_offset
+        self.x_size = x_size
+        self.y_size = y_size

@@ -78,6 +78,7 @@ class Scene:
 
 
 class Entity(SignedObject):
+
     components: List["Component"]
 
     def __init__(self):
@@ -86,10 +87,27 @@ class Entity(SignedObject):
         self.id = ENTITY_ID_MANAGER.next_id()
         self.removed = False
 
+    def _calculate_signature(self):
+        """ recalculate the signature """
+        self.signature = 0
+        for component in self.components:
+            self.signature = self.signature | component.SIGNATURE
+
     def add_component(self, component: "Component"):
         """ adds a component to the entity """
         self.signature = self.signature | component.SIGNATURE
         self.components.append(component)
+
+    def remove_components(self, components_to_remove: List["Component"]):
+        """ remove a list of components from the entity """
+        for component in components_to_remove:
+            self.components.remove(component)
+        self._calculate_signature()
+
+    def remove_component(self, component_to_remove: "Component"):
+        """ remove a component from the entity """
+        self.components.remove(component_to_remove)
+        self._calculate_signature()
 
     def has_component(self, component_type: Type["Component"]) -> bool:
         """ returns whether the entity has a component that matches the given type """
@@ -145,6 +163,8 @@ class Signal(SignedObject):
     """
     assign the return value of SIGNAL_TYPE_ID_MANAGER.next_id() when writing a new signal
     """
+    signature: int
+    """ calculated at runtime by the emitting system """
 
 
 class System:
@@ -157,10 +177,12 @@ class System:
     call calculate_required_signature and assign the return 
     value to SIGNATURE for each new type of system you make 
     """
-    SIGNAL_HANDLERS: Dict[int, Callable[["System", Scene, Signal], None]]
+    SIGNAL_HANDLERS: Dict[int, Dict[int, Callable[["System", Scene, Signal], None]]]
     """ 
     A switch that defines which handlers should be used to handle the signal, 
-    basically a map between signal signature & handler.
+    basically a map between signal ID, signal signature & handler.
+    
+    Put 0 as signature to have the handler associated with it handle every signal regardless of signature
     """
 
     @classmethod
