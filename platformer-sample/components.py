@@ -31,3 +31,24 @@ class Physical(Component):
         self.y_offset = y_offset
         self.x_size = x_size
         self.y_size = y_size
+
+
+class RigidBody(Physical):
+
+    SUBTYPE = PhysicsTypes.RIGID_BODY
+
+    def __init__(
+            self,
+            owner: Entity,
+            x_offset: float,
+            y_offset: float,
+            x_size: float,
+            y_size: float,
+            x_speed: float,
+            y_speed: float,
+            gravity: bool
+    ):
+        super().__init__(owner, x_offset, y_offset, x_size, y_size)
+        self.x_speed = x_speed
+        self.y_speed = y_speed
+        self.gravity = gravity
