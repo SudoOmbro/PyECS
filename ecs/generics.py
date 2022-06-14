@@ -119,9 +119,18 @@ class Entity(SignedObject):
                 result.append(component)
         return result
 
+    def get_component_by_signature(self, signature: int) -> "Component" or None:
+        for component in self.components:
+            if check_signature(signature, component.SIGNATURE):
+                return component
+        return None
+
     def get_components_by_types(self, component_types: Tuple[Type["Component"]]) -> List["Component"]:
         signature = get_signature_from_components(component_types)
         return self.get_components_by_signature(signature)
+
+    def get_component_by_type(self, component_type: ["Component"]) -> "Component" or None:
+        return self.get_component_by_signature(component_type.SIGNATURE)
 
 
 class EntityCollection(Collection):
@@ -132,13 +141,13 @@ class EntityCollection(Collection):
     def delete(self, obj: Entity):
         super().delete(obj)
 
-    def filter_by_type(self, component_type: Type["Component"]) -> List[Entity]:
-        """ filters all components of all entities given a component type """
+    def filter_by_component_type(self, component_type: Type["Component"]) -> List[Entity]:
+        """ returns all entities that have a given component type """
         # noinspection PyTypeChecker
         return self.filter_by_signature(component_type.SIGNATURE)
 
-    def filter_by_types(self, component_types: Tuple[Type["Component"]]) -> List[Entity]:
-        """ filters all components of all entities given a list of component types """
+    def filter_by_component_types(self, component_types: Tuple[Type["Component"]]) -> List[Entity]:
+        """ returns all entities that have all given component types """
         signature = get_signature_from_components(component_types)
         # noinspection PyTypeChecker
         return self.filter_by_signature(signature)
@@ -182,9 +191,8 @@ class System:
     Put 0 as signature to have the handler associated with it handle every signal regardless of signature
     """
 
-    def __init__(self, room: Scene, enabled: bool = True):
-        self.room = room
-        self.entities = []
+    def __init__(self, scene: Scene, enabled: bool = True):
+        self.scene = scene
         self.signals = Queue()
         self.enabled = enabled
 
@@ -201,7 +209,7 @@ class System:
         while not self.signals.empty():
             signal = self.signals.get()
             handler = self._retrieve_handler(signal.TYPE_ID, signal.signature)
-            handler(self, self.room, signal)
+            handler(self, self.scene, signal)
 
     def update(self):
         """ put system logic here """
