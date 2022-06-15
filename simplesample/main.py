@@ -4,6 +4,10 @@ from simplesample.systems import GenerationSystem, InputSystem, PhysicsSystem, D
 
 
 def main():
+    """
+    implements a 20 by 20 randomly generated grid in which you walk.
+    By walking you score points & if walk on a trap you lose hp.
+    """
     current_scene: Scene = Scene()
     # generate and render first frame
     current_scene.add_systems([

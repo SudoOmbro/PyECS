@@ -220,7 +220,10 @@ class System:
         return default_handler
 
     def handle_signals(self):
-        """ handle all received signals """
+        """
+        handle all received signals, only call in the update function if the system is supposed to receive signals,
+        otherwise it's pointless.
+        """
         while not self.signals.empty():
             signal = self.signals.get()
             handler = self._retrieve_handler(signal.TYPE_ID, signal.signature)

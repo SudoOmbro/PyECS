@@ -35,7 +35,6 @@ def handle_move_signal(system: System, scene: Scene, event: MoveEvent):
     if (-1 < next_x < 20) and (-1 < next_y < 20):
         position.x = next_x
         position.y = next_y
-        # print(f"Moved to x: {next_x}, y: {next_y}")
     else:
         print("Can't move there!")
 
