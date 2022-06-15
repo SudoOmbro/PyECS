@@ -66,7 +66,7 @@ class Scene:
 
     def _del_entities(self):
         while not self._entities_to_delete.empty():
-            entity = self._entities_to_add.get()
+            entity = self._entities_to_delete.get()
             self.entities.delete(entity)
 
     def update(self) -> int:
