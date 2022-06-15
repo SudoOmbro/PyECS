@@ -58,32 +58,69 @@ class SignedObject:
 
 
 class Collection:
-    """ A generic collection of SignedObjects that can be filtered by signature """
+    """
+    A generic collection of SignedObjects that can be filtered by signature.
+    """
 
     def __init__(self):
         self.objects: Dict[int, SignedObject] = {}
+        self.last_added_id: int = 0
+
+    def add(self, obj: SignedObject):
+        """ adds an object to the collection """
+        self.last_added_id = obj.id
+        self.objects[obj.id] = obj
+
+    def delete(self, obj: SignedObject):
+        """ removes an object from the collection """
+        self.objects.pop(obj.id)
+
+    def get_last(self) -> SignedObject or None:
+        """ returns the last object added to the collection """
+        return self.objects.get(self.last_added_id, None)
+
+    def filter_by_signature(self, signature: int) -> List[SignedObject]:
+        """ filters all objects given a single signature """
+        result: List[SignedObject] = []
+        for entity_id in self.objects:
+            obj = self.objects[entity_id]
+            if check_signature(obj.signature, signature):
+                result.append(obj)
+        return result
+
+    def get_first_signature_match(self, signature: int) -> SignedObject or None:
+        for entity_id in self.objects:
+            obj = self.objects[entity_id]
+            if check_signature(obj.signature, signature):
+                return obj
+        return None
+
+
+class CachedCollection(Collection):
+    """
+    A generic collection of SignedObjects that can be filtered by signature, also includes a cache to speed up lookups.
+    """
+
+    def __init__(self):
+        super().__init__()
         self._filter_cache: Dict[int, List[SignedObject]] = {}
         self._affected_signatures_since_last_clear: int = 0
 
     def add(self, obj: SignedObject):
         """ adds an object to the collection """
         self._affected_signatures_since_last_clear = self._affected_signatures_since_last_clear | obj.signature
-        self.objects[obj.id] = obj
+        super().add(obj)
 
     def delete(self, obj: SignedObject):
         """ removes an object from the collection """
         self._affected_signatures_since_last_clear = self._affected_signatures_since_last_clear | obj.signature
-        self.objects.pop(obj.id)
+        super().delete(obj)
 
     def filter_by_signature(self, signature: int) -> List[SignedObject]:
         """ filters all objects given a single signature, then caches the result """
         if signature in self._filter_cache:
             return self._filter_cache[signature]
-        result: List[SignedObject] = []
-        for entity_id in self.objects:
-            obj = self.objects[entity_id]
-            if check_signature(obj.signature, signature):
-                result.append(obj)
+        result: List[SignedObject] = super().filter_by_signature(signature)
         self._filter_cache[signature] = result
         return result
 

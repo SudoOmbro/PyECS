@@ -36,3 +36,7 @@ class Score(Component):
     def __init__(self, owner: Entity):
         super().__init__(owner)
         self.score = 0
+
+
+class PlayerController(Component):
+    SIGNATURE = COMPONENT_SIGNATURE_MANAGER.next_signature()

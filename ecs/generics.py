@@ -2,7 +2,7 @@ from functools import cache
 from typing import List, Type, Callable, Dict, Tuple
 from queue import Queue
 
-from ecs.utils import check_signature, SignedObject, IDManager, Collection, SignatureManager
+from ecs.utils import check_signature, SignedObject, IDManager, CachedCollection, SignatureManager, Collection
 
 COMPONENT_SIGNATURE_MANAGER = SignatureManager()
 
@@ -12,6 +12,7 @@ SIGNAL_TYPE_ID_MANAGER = IDManager()
 
 @cache
 def get_signature_from_components(component_types: Tuple[Type["Component"]]) -> int:
+    """ returns the signature matching the given combination of components """
     signature: int = 0
     for c_type in component_types:
         signature = signature | c_type.SIGNATURE
@@ -30,6 +31,12 @@ class Scene:
         """ adds and sorts all given systems by priority """
         for system in systems:
             self._systems.append(system)
+        self._systems.sort(key=lambda s: s.PRIORITY)
+
+    def delete_systems(self, systems: List["System"]):
+        """ adds and sorts all given systems by priority """
+        for system in systems:
+            self._systems.remove(system)
         self._systems.sort(key=lambda s: s.PRIORITY)
 
     def add_entity(self, entity: "Entity"):
@@ -62,29 +69,31 @@ class Scene:
             entity = self._entities_to_add.get()
             self.entities.delete(entity)
 
-    def update(self):
-        """ update the scene """
+    def update(self) -> int:
+        """ update all the enabled systems in the scene, return 1 if a system set the termination flag """
         # run all enabled systems
         for system in self._systems:
             if system.enabled:
-                system.update()
+                if system.update() == 1:
+                    print(system.exit_message)  # TODO Change this to a logger
+                    return 1
         # add & delete entities
         clear: bool = not (self._entities_to_delete.empty() and self._entities_to_add.empty())
         self._del_entities()
         self._add_entities()
         if clear:
             self.entities.clear_cache()
+        return 0
 
 
 class Entity(SignedObject):
-
-    components: List["Component"]
 
     def __init__(self):
         """ add components in the extension to this method by calling add_component """
         self.signature: int = 0
         self.id = ENTITY_ID_MANAGER.next_id()
         self.removed = False
+        self.components: List["Component"] = []
 
     def _calculate_signature(self):
         """ recalculate the signature """
@@ -133,7 +142,7 @@ class Entity(SignedObject):
         return self.get_component_by_signature(component_type.SIGNATURE)
 
 
-class EntityCollection(Collection):
+class EntityCollection(CachedCollection):
 
     def add(self, obj: Entity):
         super().add(obj)
@@ -171,8 +180,13 @@ class Signal(SignedObject):
     """
     assign the return value of SIGNAL_TYPE_ID_MANAGER.next_id() when writing a new signal
     """
-    signature: int
-    """ calculated at runtime by the emitting system """
+
+    def __init__(self, involved_entities: List[Entity]):
+        self.involved_entities = Collection()
+        self.signature = 0
+        for entity in involved_entities:
+            self.signature = self.signature | entity.signature
+            self.involved_entities.add(entity)
 
 
 def default_handler(system: "System", scene: Scene, signal: Signal):
@@ -183,7 +197,7 @@ def default_handler(system: "System", scene: Scene, signal: Signal):
 class System:
     PRIORITY: int
     """ The priority the system has on the others. The lower it is, the sooner the system will be processed """
-    SIGNAL_HANDLERS: Dict[int, Dict[int, Callable[["System", Scene, Signal], None]]]
+    SIGNAL_HANDLERS: Dict[int, Dict[int, Callable[["System", Scene, Signal], None]]] = {}
     """ 
     A switch that defines which handlers should be used to handle the signal, 
     basically a map between signal ID, signal signature & handler.
@@ -195,6 +209,7 @@ class System:
         self.scene = scene
         self.signals = Queue()
         self.enabled = enabled
+        self.exit_message = ""
 
     @cache
     def _retrieve_handler(self, signal_id: int, signal_signature: int):
@@ -211,6 +226,6 @@ class System:
             handler = self._retrieve_handler(signal.TYPE_ID, signal.signature)
             handler(self, self.scene, signal)
 
-    def update(self):
-        """ put system logic here """
+    def update(self) -> int:
+        """ put system logic here, you can use the return value to exit the loop you presumably implemented """
         raise NotImplemented

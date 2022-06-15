@@ -1,6 +1,10 @@
 # PyECS
 A Python implementation of an Entity Component System
 
+**Python >= 3.9 required**
+
+****
+
 ## Architecture
 Like every other ECS, this one has 3 main components + 2 "middleware" classes:
 
