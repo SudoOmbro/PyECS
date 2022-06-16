@@ -34,11 +34,3 @@ containers for **systems** and **entities** that also provides ways for them to
 create new entities, delete already existing entities & propagate **signals**.
 
 A scene can be thought of as a level in a game.
-
-## Extensions
-Some nice-to-have packages.
-
-### Semirandom
-Provides a faster (3.5x) version of python's default randint function that is not "true" 
-random. Useful for when random calls have to be made frequently and repetition 
-doesn't matter too much.

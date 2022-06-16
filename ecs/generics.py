@@ -75,7 +75,7 @@ class Scene:
         for system in self._systems:
             if system.enabled:
                 if system.update() == 1:
-                    print(system.exit_message)  # TODO Change this to a logger
+                    print(system.exit_message)  # TODO? Change this to a logger
                     return 1
         # add & delete entities
         clear: bool = not (self._entities_to_delete.empty() and self._entities_to_add.empty())
@@ -162,24 +162,37 @@ class EntityCollection(CachedCollection):
         return self.filter_by_signature(signature)
 
 
+class MetaComponent(type):
+    """ metaclass used for component creation, automatically handles the SIGNATURE """
+
+    def __new__(mcs, class_name, bases, attrs):
+        attrs["SIGNATURE"] = COMPONENT_SIGNATURE_MANAGER.next_signature()
+        return type(class_name, bases, attrs)
+
+
 class Component:
+    """ abstract components class """
+
     SIGNATURE: int
-    """ 
-    call COMPONENT_SIGNATURE_MANAGER.next_signature() and assign the return 
-    value to SIGNATURE for each new type of component you make 
-    """
+    """ automatically calculated by MetaComponent if set as metaclass when you create a new component type """
 
     def __init__(self, owner: Entity):
         self.owner = owner
 
 
+class MetaSignal(type):
+    """ metaclass used for signal creation, automatically handles the TYPE_ID """
+
+    def __new__(mcs, class_name, bases, attrs):
+        attrs["TYPE_ID"] = SIGNAL_TYPE_ID_MANAGER.next_id()
+        return type(class_name, bases, attrs)
+
+
 class Signal(SignedObject):
-    """ create your own custom signals to pass to other systems by inheriting from this class """
+    """ abstract signal class """
 
     TYPE_ID: int
-    """
-    assign the return value of SIGNAL_TYPE_ID_MANAGER.next_id() when writing a new signal
-    """
+    """ automatically calculated by MetaSignal if set as metaclass when you create a new signal type """
 
     def __init__(self, involved_entities: List[Entity]):
         self.involved_entities = Collection()
